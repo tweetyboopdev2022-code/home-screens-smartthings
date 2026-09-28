@@ -18,18 +18,18 @@ const ICONS: Record<Kind, Shape[]> = {
   other: [C(12, 12, 9)],
 };
 
-async function st(path: string, method = 'GET', body?: unknown) {
+async function st(path: string, method = 'GET', body?: unknown, ttl = 0) {
   const res: Response = await sdk().pluginFetch('smartthings', {
-    url: `${API}${path}`, method, cacheTtlMs: 0,
+    url: `${API}${path}`, method, cacheTtlMs: method === 'GET' ? ttl : 0,
     ...(body ? { payload: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } } : {}),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const t = await res.text(); return t ? JSON.parse(t) : null;
 }
-async function allPages(path: string): Promise<any[]> {
+async function allPages(path: string, ttl = 0): Promise<any[]> {
   const out: any[] = []; let next: string | null = path;
   for (let i = 0; next && i < 10; i++) {
-    const j: any = await st(next);
+    const j: any = await st(next, 'GET', undefined, ttl);
     out.push(...(j?.items ?? []));
     const href: string | undefined = j?._links?.next?.href;
     next = href ? href.replace(/^https:\/\/api\.smartthings\.com\/v1/, '') : null;
@@ -49,35 +49,54 @@ export default function SmartThings({ config, style, ...rest }: PluginComponentP
   const [busy, setBusy] = React.useState<string | null>(null);
   const tick = now.getTime();
 
-  // device list + rooms: every 10 minutes
-  const listTick = Math.floor(tick / 600000);
-  React.useEffect(() => { (async () => {
-    try {
-      const [devs, locs] = await Promise.all([allPages('/devices'), allPages('/locations')]);
-      const rm: Record<string, string> = {};
-      await Promise.all(locs.map(async (l: any) => { (await allPages(`/locations/${l.locationId}/rooms`)).forEach((r: any) => { rm[r.roomId] = r.name; }); }));
-      setRooms(rm); setDevices(devs); setErr(null);
-    } catch (e) {
-      const m = String((e as Error).message);
-      setErr(/401|403/.test(m) || /HTTP 500/.test(m) ? 'Connect SmartThings: open this block’s settings → Connection → Connect.' : 'Can’t reach SmartThings right now.');
-    }
-  })(); }, [listTick]);
+  // ONE request per poll for every device + its status (includeStatus), cached on the hub so every
+  // copy of this block (day, night, editor preview) shares it. Rooms are cached for 10 minutes.
+  const pollMs = 1000 * Math.max(20, Number(config.pollSeconds ?? 45));
+  const tapped = React.useRef<Record<string, number>>({});
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const [devs, locs] = await Promise.all([allPages('/devices?includeStatus=true', pollMs - 2000), allPages('/locations', 600000)]);
+        if (!alive) return;
+        const rm: Record<string, string> = {};
+        await Promise.all(locs.map(async (l: any) => { (await allPages(`/locations/${l.locationId}/rooms`, 600000)).forEach((r: any) => { rm[r.roomId] = r.name; }); }));
+        const st2: Record<string, Status> = {};
+        devs.forEach((d: any) => {
+          const main = (d.components ?? []).find((c: any) => c.id === 'main') ?? d.components?.[0];
+          if (!main) return;
+          if (main.status) { st2[d.deviceId] = main.status; return; }
+          const caps = main.capabilities ?? [];
+          if (caps.some((c: any) => c.status)) { const o: Status = {}; caps.forEach((c: any) => { if (c.status) o[c.id] = c.status; }); st2[d.deviceId] = o; }
+        });
+        if (!alive) return;
+        setRooms(rm); setDevices(devs); setErr(null);
+        Object.keys(st2).forEach((id) => { if (Date.now() - (tapped.current[id] ?? 0) < pollMs + 5000) delete st2[id]; });
+        setStatus((old) => ({ ...old, ...st2 }));
+      } catch (e) {
+        const m = String((e as Error).message);
+        if (/429/.test(m)) return; // busy: keep showing the last good data
+        setErr(/401|403/.test(m) || /HTTP 500/.test(m) ? 'Connect SmartThings: open this block’s settings → Connection → Connect.' : 'Can’t reach SmartThings right now.');
+      }
+    })();
+    return () => { alive = false; };
+  }, [tick, pollMs]);
 
   const shown = React.useMemo(() => (devices ? pick(devices, rooms, String(config.devices || '')).filter((d) => config.showOther !== false || kindOf(d) !== 'other').slice(0, 80) : []), [devices, rooms, config.devices]);
 
-  // statuses: every poll
+  // fallback if SmartThings didn't include statuses: fetch the missing ones slowly (max 8 per poll, shared cache)
   React.useEffect(() => {
-    if (!shown.length) return;
+    const missing = shown.filter((d) => !status[d.deviceId]).slice(0, 8);
+    if (!missing.length) return;
     let alive = true;
     (async () => {
-      const entries = await Promise.all(shown.map(async (d) => {
-        try { const j = await st(`/devices/${d.deviceId}/status`); return [d.deviceId, (j?.components?.main ?? {}) as Status] as const; } catch { return null; }
-      }));
-      if (!alive) return;
-      setStatus((old) => { const n = { ...old }; entries.forEach((e) => { if (e) n[e[0]] = e[1]; }); return n; });
+      for (const d of missing) {
+        try { const j = await st(`/devices/${d.deviceId}/status`, 'GET', undefined, pollMs * 2); if (alive) setStatus((o) => ({ ...o, [d.deviceId]: (j?.components?.main ?? {}) as Status })); }
+        catch (e) { if (/429/.test(String((e as Error).message))) break; }
+      }
     })();
     return () => { alive = false; };
-  }, [tick, shown]);
+  }, [tick, shown]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // shared state for display rules (wake on motion, etc.)
   const kinds = shown.map((d) => [kindOf(d), status[d.deviceId]] as const);
@@ -92,7 +111,7 @@ export default function SmartThings({ config, style, ...rest }: PluginComponentP
   }, [anyMotion, anyOpen, anyoneHome, laundryDone]);
 
   const act = async (d: StDevice, capability: string, command: string) => {
-    setBusy(d.deviceId);
+    setBusy(d.deviceId); tapped.current[d.deviceId] = Date.now();
     try {
       await st(`/devices/${d.deviceId}/commands`, 'POST', { commands: [{ component: 'main', capability, command }] });
       setTimeout(async () => { try { const j = await st(`/devices/${d.deviceId}/status`); setStatus((o) => ({ ...o, [d.deviceId]: j?.components?.main ?? {} })); } catch { /* next poll */ } setBusy(null); }, 1500);
