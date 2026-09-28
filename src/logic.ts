@@ -75,7 +75,25 @@ export function tile(d: StDevice, s: Status | undefined, allowControl: boolean, 
       const h = val(s, 'relativeHumidityMeasurement', 'humidity');
       return { title, value: temp(t, u), sub: typeof h === 'number' ? `${Math.round(h)}% humidity` : undefined, tone: 'neutral' };
     }
-    default: return { title, value: '—', tone: 'neutral' };
+    default: {
+      // devices we don't have a special tile for: show the most useful thing we can find
+      const c = caps(d);
+      const pick1 = (cap: string, attr: string) => (c.has(cap) ? val(s, cap, attr) : undefined);
+      const robot = pick1('robotCleanerMovement', 'robotCleanerMovement') ?? pick1('samsungce.robotCleanerOperatingState', 'operatingState');
+      if (robot != null) return { title, value: String(robot).replace(/([A-Z])/g, ' $1').replace(/^./, (x) => x.toUpperCase()), tone: /clean|run/i.test(String(robot)) ? 'on' : 'neutral' };
+      const play = pick1('mediaPlayback', 'playbackStatus');
+      if (play != null) return { title, value: String(play) === 'playing' ? 'Playing' : String(play) === 'paused' ? 'Paused' : 'Stopped', tone: String(play) === 'playing' ? 'on' : 'neutral' };
+      const mode = pick1('airConditionerMode', 'airConditionerMode') ?? pick1('airPurifierFanMode', 'airPurifierFanMode');
+      if (mode != null) return { title, value: String(mode), tone: 'neutral' };
+      const water = pick1('waterSensor', 'water');
+      if (water != null) return { title, value: water === 'wet' ? 'Leak!' : 'Dry', tone: water === 'wet' ? 'alert' : 'ok' };
+      const smoke = pick1('smokeDetector', 'smoke');
+      if (smoke != null) return { title, value: smoke === 'detected' ? 'Smoke!' : 'Clear', tone: smoke === 'detected' ? 'alert' : 'ok' };
+      const b = pick1('battery', 'battery');
+      if (typeof b === 'number') return { title, value: `${b}% battery`, tone: 'neutral' };
+      const first = [...c].find((x) => !/^(healthCheck|refresh|execute|ocf|custom\.|samsungce\.softwareUpdate|firmwareUpdate|configuration)/.test(x));
+      return { title, value: 'Connected', sub: first ? first.replace(/^samsungce\./, '').replace(/([A-Z])/g, ' $1').toLowerCase() : undefined, tone: 'neutral' };
+    }
   }
 }
 

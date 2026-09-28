@@ -63,7 +63,7 @@ export default function SmartThings({ config, style, ...rest }: PluginComponentP
     }
   })(); }, [listTick]);
 
-  const shown = React.useMemo(() => (devices ? pick(devices, rooms, String(config.devices || '')).filter((d) => kindOf(d) !== 'other').slice(0, 30) : []), [devices, rooms, config.devices]);
+  const shown = React.useMemo(() => (devices ? pick(devices, rooms, String(config.devices || '')).filter((d) => config.showOther !== false || kindOf(d) !== 'other').slice(0, 80) : []), [devices, rooms, config.devices]);
 
   // statuses: every poll
   React.useEffect(() => {
@@ -110,14 +110,14 @@ export default function SmartThings({ config, style, ...rest }: PluginComponentP
     <div style={frame(style, { gap: '0.6em' })}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5em' }}>
         <h2 style={{ margin: 0, fontSize: '1.1em', fontWeight: 600 }}>{String(config.title || 'Home')}</h2>
-        {devices && <span style={{ fontSize: '0.65em', opacity: 0.35 }}>{shown.length} device{shown.length === 1 ? '' : 's'}</span>}
+        {devices && <span style={{ fontSize: '0.65em', opacity: 0.35 }}>{shown.length}{devices.length !== shown.length ? ` of ${devices.length}` : ''} device{shown.length === 1 ? '' : 's'}</span>}
         {batteries.length > 0 && <span style={{ marginLeft: 'auto', fontSize: '0.65em', fontWeight: 600, color: '#d97706' }}>Low battery: {batteries.map((x) => `${x.d.label || x.d.name} ${x.b}%`).join(', ')}</span>}
       </div>
       {err ? <div style={{ margin: 'auto', fontSize: '0.8em', opacity: 0.6, textAlign: 'center', maxWidth: '24em' }}>{err}</div>
         : !devices ? <div style={{ margin: 'auto', fontSize: '0.8em', opacity: 0.4 }}>Loading devices…</div>
         : !shown.length ? <div style={{ margin: 'auto', fontSize: '0.8em', opacity: 0.5 }}>No matching devices — check “Show these devices” in the settings.</div>
         : (
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '0.7em' }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'none', display: 'flex', flexDirection: 'column', gap: '0.7em' } as React.CSSProperties}>
             {groups.map((g) => (
               <div key={g.room} style={{ display: 'flex', flexDirection: 'column', gap: '0.35em' }}>
                 {groups.length > 1 && <div style={capsStyle}>{g.room}</div>}

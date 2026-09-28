@@ -1,7 +1,7 @@
 {
   "id": "smartthings",
   "name": "SmartThings",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Your SmartThings devices on the wall, grouped by room: lights and plugs, locks, doors and windows, motion and presence, temperature and thermostats, washer and dryer. Tap lights and plugs to switch them.",
   "author": "Tanya",
   "license": "MIT",
@@ -15,7 +15,8 @@
     "pollSeconds": 45,
     "allowControl": true,
     "showBattery": true,
-    "accentColor": "#0ea5e9"
+    "accentColor": "#0ea5e9",
+    "showOther": true
   },
   "defaultSize": {
     "w": 1000,
@@ -68,6 +69,12 @@
         "title": "Accent colour",
         "ui:widget": "color",
         "ui:group": "Look"
+      },
+      "showOther": {
+        "type": "boolean",
+        "title": "Also show other devices (TVs, speakers, vacuums, leak & smoke sensors…)",
+        "ui:widget": "toggle",
+        "ui:group": "Content"
       }
     }
   },
