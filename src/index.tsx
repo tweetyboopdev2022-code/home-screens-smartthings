@@ -87,8 +87,8 @@ export default function SmartThings({ config, style, ...rest }: PluginComponentP
   const laundryDone = kinds.some(([k, s]) => (k === 'washer' || k === 'dryer') && val(s, `${k}OperatingState`, `${k}JobState`) === 'finish');
   React.useEffect(() => {
     const p = sdk()?.publishState; if (!p) return;
-    p('smartthings', 'anyMotion', anyMotion ? 'yes' : 'no'); p('smartthings', 'anyOpen', anyOpen ? 'yes' : 'no');
-    p('smartthings', 'anyoneHome', anyoneHome ? 'yes' : 'no'); p('smartthings', 'laundryDone', laundryDone ? 'yes' : 'no');
+    p('smartthings', 'any-motion', anyMotion ? 'yes' : 'no'); p('smartthings', 'any-open', anyOpen ? 'yes' : 'no');
+    p('smartthings', 'anyone-home', anyoneHome ? 'yes' : 'no'); p('smartthings', 'laundry-done', laundryDone ? 'yes' : 'no');
   }, [anyMotion, anyOpen, anyoneHome, laundryDone]);
 
   const act = async (d: StDevice, capability: string, command: string) => {

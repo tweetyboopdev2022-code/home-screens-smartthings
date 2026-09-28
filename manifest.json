@@ -1,7 +1,7 @@
 {
   "id": "smartthings",
   "name": "SmartThings",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Your SmartThings devices on the wall, grouped by room: lights and plugs, locks, doors and windows, motion and presence, temperature and thermostats, washer and dryer. Tap lights and plugs to switch them.",
   "author": "Tanya",
   "license": "MIT",
@@ -87,7 +87,7 @@
   ],
   "providesState": [
     {
-      "key": "anyMotion",
+      "key": "any-motion",
       "label": "Motion detected (any selected sensor)",
       "sampleValues": [
         "yes",
@@ -95,7 +95,7 @@
       ]
     },
     {
-      "key": "anyOpen",
+      "key": "any-open",
       "label": "A door or window is open",
       "sampleValues": [
         "yes",
@@ -103,7 +103,7 @@
       ]
     },
     {
-      "key": "anyoneHome",
+      "key": "anyone-home",
       "label": "Someone is home (presence)",
       "sampleValues": [
         "yes",
@@ -111,7 +111,7 @@
       ]
     },
     {
-      "key": "laundryDone",
+      "key": "laundry-done",
       "label": "Washer or dryer just finished",
       "sampleValues": [
         "yes",
